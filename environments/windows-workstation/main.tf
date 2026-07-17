@@ -9,6 +9,7 @@
 #   - this file = the recipe that combines them
 #   - terraform.tfvars = your specific quantities
 # =============================================================================
+# Initial deployment via GitHub Actions.
 
 terraform {
   required_version = ">= 1.6.0"

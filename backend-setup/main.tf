@@ -141,6 +141,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
     id     = "expire-old-logs"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = 90
     }
