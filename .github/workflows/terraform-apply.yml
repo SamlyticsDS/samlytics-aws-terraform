@@ -1,0 +1,182 @@
+# =============================================================================
+# TERRAFORM APPLY — Runs When PR is Merged to Main
+# =============================================================================
+# WHAT THIS DOES:
+#   When a Pull Request is merged into main:
+#   1. Authenticates to AWS via OIDC
+#   2. Runs "terraform plan" one more time (safety check)
+#   3. Runs "terraform apply" — actually creates/updates AWS resources
+#   4. Posts the results as a commit status
+#
+# SAFETY FEATURES:
+#   - Only triggers on push to main (not on PRs)
+#   - Runs plan THEN apply (not apply directly)
+#   - Uses same OIDC auth as plan (no stored credentials)
+#   - Deployment summary posted to job summary
+# =============================================================================
+
+name: "Terraform Apply"
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "environments/windows-workstation/**"
+      - "modules/**"
+
+  # Allow manually triggering the apply
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'apply' to confirm you want to apply changes"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+env:
+  TF_VERSION: "1.9.0"
+  WORKING_DIR: "environments/windows-workstation"
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  terraform-apply:
+    name: "Terraform Apply"
+    runs-on: ubuntu-latest
+    environment: production  # Requires environment approval if configured
+
+    # For manual dispatch, require the word "apply" to prevent accidents
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'apply')
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-apply-${{ github.run_id }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Write backend config
+        run: |
+          cat > backend_override.tf << EOF
+          terraform {
+            backend "s3" {
+              bucket         = "${{ secrets.TF_STATE_BUCKET }}"
+              key            = "windows-workstation/terraform.tfstate"
+              region         = "${{ secrets.AWS_REGION }}"
+              dynamodb_table = "${{ secrets.TF_STATE_LOCK_TABLE }}"
+              encrypt        = true
+            }
+          }
+          EOF
+
+      - name: Write terraform.tfvars
+        run: |
+          cat > terraform.tfvars << EOF
+          aws_account_id         = "${{ secrets.AWS_ACCOUNT_ID }}"
+          aws_region             = "${{ secrets.AWS_REGION }}"
+          project_name           = "${{ secrets.PROJECT_NAME }}"
+          environment            = "${{ secrets.ENVIRONMENT }}"
+          availability_zones     = ${{ secrets.AVAILABILITY_ZONES }}
+          alert_email            = "${{ secrets.ALERT_EMAIL }}"
+          instance_type          = "${{ secrets.INSTANCE_TYPE }}"
+          EOF
+
+      - name: Terraform Init
+        run: terraform init
+        env:
+          TF_INPUT: false
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan \
+            -no-color \
+            -out=tfplan \
+            -detailed-exitcode \
+            2>&1 | tee plan_output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        env:
+          TF_INPUT: false
+
+      # Exit code 0 = no changes, 1 = error, 2 = changes present
+      - name: Check for changes
+        if: steps.plan.outputs.exit_code == '0'
+        run: |
+          echo "No changes detected. Infrastructure is up to date."
+          echo "Skipping apply."
+
+      - name: Terraform Apply
+        if: steps.plan.outputs.exit_code == '2'  # Only apply if there are changes
+        run: |
+          terraform apply \
+            -auto-approve \
+            -no-color \
+            tfplan \
+            2>&1 | tee apply_output.txt
+        env:
+          TF_INPUT: false
+
+      - name: Capture Terraform Outputs
+        if: steps.plan.outputs.exit_code == '2'
+        id: tf_outputs
+        run: |
+          terraform output -no-color 2>&1 | tee outputs.txt || true
+
+      - name: Post Apply Summary
+        if: always()
+        run: |
+          {
+            echo "## Terraform Apply Summary"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Workflow** | ${{ github.workflow }} |"
+            echo "| **Triggered by** | ${{ github.actor }} |"
+            echo "| **Commit** | [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |"
+            echo "| **Status** | ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }} |"
+            echo ""
+            if [ -f apply_output.txt ]; then
+              echo "### Apply Output"
+              echo '```'
+              cat apply_output.txt | tail -50
+              echo '```'
+            fi
+            if [ -f outputs.txt ]; then
+              echo "### Terraform Outputs"
+              echo '```'
+              cat outputs.txt
+              echo '```'
+            fi
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if apply failed
+        if: failure()
+        run: |
+          echo "::error::Terraform apply failed! Check the logs above."
+          exit 1

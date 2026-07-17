@@ -1,0 +1,168 @@
+# =============================================================================
+# TERRAFORM DESTROY — Manual Button to Tear Down Everything
+# =============================================================================
+# WHAT THIS DOES:
+#   Destroys ALL AWS resources created by this Terraform configuration.
+#   This immediately stops all AWS charges for these resources.
+#
+# HOW TO TRIGGER:
+#   GitHub → Actions → "Terraform Destroy" → "Run workflow" button
+#   You MUST type "destroy" to confirm — prevents accidental destruction.
+#
+# WHAT IS DESTROYED:
+#   - EC2 instance (Windows server, all installed software)
+#   - EBS volumes (all data — this is PERMANENT)
+#   - VPC, subnets, NAT Gateway
+#   - GuardDuty, CloudTrail, Security Hub, Config
+#   - CloudWatch alarms, dashboards, log groups
+#   - KMS key (scheduled for deletion after deletion window)
+#
+# WHAT IS NOT DESTROYED:
+#   - The S3 state bucket (from backend-setup/) — has prevent_destroy
+#   - CloudTrail S3 logs (may need manual deletion)
+#
+# ⚠️  WARNING: THIS ACTION IS IRREVERSIBLE.
+#     All data on EC2 volumes will be permanently lost.
+#     Make sure you have backups of any important data first.
+# =============================================================================
+
+name: "Terraform Destroy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "⚠️ TYPE 'destroy' TO CONFIRM — This permanently deletes all AWS resources and data"
+        required: true
+        type: string
+      reason:
+        description: "Why are you destroying this environment? (for audit trail)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.9.0"
+  WORKING_DIR: "environments/windows-workstation"
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  confirm-destroy:
+    name: "Confirm Destroy Request"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
+            echo "::error::You must type exactly 'destroy' to confirm. You typed: '${{ github.event.inputs.confirm }}'"
+            exit 1
+          fi
+          echo "Confirmation accepted. Destroy requested by: ${{ github.actor }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+
+  terraform-destroy:
+    name: "Terraform Destroy"
+    runs-on: ubuntu-latest
+    needs: confirm-destroy  # Only runs if confirmation job passed
+    environment: production
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-destroy-${{ github.run_id }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Write backend config
+        run: |
+          cat > backend_override.tf << EOF
+          terraform {
+            backend "s3" {
+              bucket         = "${{ secrets.TF_STATE_BUCKET }}"
+              key            = "windows-workstation/terraform.tfstate"
+              region         = "${{ secrets.AWS_REGION }}"
+              dynamodb_table = "${{ secrets.TF_STATE_LOCK_TABLE }}"
+              encrypt        = true
+            }
+          }
+          EOF
+
+      - name: Write terraform.tfvars
+        run: |
+          cat > terraform.tfvars << EOF
+          aws_account_id         = "${{ secrets.AWS_ACCOUNT_ID }}"
+          aws_region             = "${{ secrets.AWS_REGION }}"
+          project_name           = "${{ secrets.PROJECT_NAME }}"
+          environment            = "${{ secrets.ENVIRONMENT }}"
+          availability_zones     = ${{ secrets.AVAILABILITY_ZONES }}
+          alert_email            = "${{ secrets.ALERT_EMAIL }}"
+          instance_type          = "${{ secrets.INSTANCE_TYPE }}"
+          EOF
+
+      - name: Terraform Init
+        run: terraform init
+        env:
+          TF_INPUT: false
+
+      - name: Show what will be destroyed
+        run: |
+          echo "The following resources will be destroyed:"
+          terraform state list 2>/dev/null || echo "(could not list state)"
+
+      - name: Terraform Destroy
+        run: |
+          terraform destroy \
+            -auto-approve \
+            -no-color \
+            2>&1 | tee destroy_output.txt
+        env:
+          TF_INPUT: false
+
+      - name: Post Destroy Summary
+        if: always()
+        run: |
+          {
+            echo "## ⚠️ Terraform Destroy Summary"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Destroyed by** | ${{ github.actor }} |"
+            echo "| **Reason given** | ${{ github.event.inputs.reason }} |"
+            echo "| **Timestamp** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |"
+            echo "| **Status** | ${{ job.status == 'success' && '✅ Destroy Complete' || '❌ Destroy Failed' }} |"
+            echo ""
+            echo "### Destroy Output (last 50 lines)"
+            echo '```'
+            tail -50 destroy_output.txt 2>/dev/null || echo "(no output)"
+            echo '```'
+            echo ""
+            echo "> All AWS resources and associated data have been permanently deleted."
+            echo "> AWS charges for these resources have stopped."
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if destroy failed
+        if: failure()
+        run: |
+          echo "::error::Terraform destroy failed! Some resources may still exist."
+          echo "Check the AWS Console and the logs above to identify remaining resources."
+          exit 1

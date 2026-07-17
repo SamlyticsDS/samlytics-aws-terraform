@@ -1,0 +1,73 @@
+# =============================================================================
+# TERRAFORM VARIABLES — Your Configuration
+# =============================================================================
+# HOW TO USE:
+#   1. Copy this file: copy terraform.tfvars.example to terraform.tfvars
+#   2. Fill in the values below
+#   3. IMPORTANT: Never commit terraform.tfvars to git (it may contain secrets)
+#      The .gitignore in this repo already excludes it.
+#
+# FINDING YOUR VALUES:
+#   aws_account_id  → AWS Console → top-right corner → "Account ID"
+#   aws_region      → AWS Console → top-right corner → region selector
+#   availability_zones → run: aws ec2 describe-availability-zones --query 'AvailabilityZones[*].ZoneName'
+# =============================================================================
+
+
+
+
+# Your AWS Account ID (12-digit number)
+aws_account_id = "123456789012"
+
+# AWS region where everything will be deployed
+# Common options: eu-west-1 (Ireland), us-east-1 (Virginia), af-south-1 (Cape Town)
+aws_region = "eu-west-1"
+
+# Short name for your organisation (used in resource names — lowercase, hyphens only)
+project_name = "myorg"
+
+# Environment (dev for testing, prod for live)
+environment = "dev"
+
+# Availability Zones in your chosen region (must match aws_region)
+# eu-west-1 example:
+availability_zones = ["eu-west-1a", "eu-west-1b"]
+# us-east-1 example:
+# availability_zones = ["us-east-1a", "us-east-1b"]
+
+# IP ranges — usually fine to leave as defaults
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
+
+# EC2 instance size (see variables.tf for options and costs)
+instance_type = "t3.xlarge"
+
+# Storage sizes (in GB)
+root_volume_size_gb = 150   # C: drive (Windows + software)
+data_volume_size_gb = 200   # D: drive (SQL databases, projects)
+
+# Your email address — you'll get an alert confirmation email, click the link!
+alert_email = "your-email@example.com"
+
+# Alert thresholds (%)
+cpu_alarm_threshold    = 80
+memory_alarm_threshold = 85
+disk_alarm_threshold   = 85
+
+# RDP access (leave empty to use SSM only — recommended)
+# To allow direct RDP from your office IP: ["203.0.113.10/32"]
+allowed_rdp_cidrs = []
+
+# Security features (all recommended)
+enable_guardduty    = true
+enable_security_hub = true
+enable_cloudtrail   = true
+enable_aws_config   = true
+
+# Additional tags for cost reporting
+tags = {
+  Owner      = "DevOps Team"
+  CostCenter = "Engineering"
+  Repo       = "github.com/your-org/terraform-for-aws"
+}
