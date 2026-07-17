@@ -67,6 +67,25 @@ jobs:
           terraform_wrapper: true  # Allows capturing terraform output
 
       # -----------------------------------------------------------------------
+      # TEMP DEBUG: Inspect the resolved secret and the raw OIDC token claims.
+      # Remove this step once the OIDC handshake is working.
+      # -----------------------------------------------------------------------
+      - name: Debug OIDC claims and secret
+        run: |
+          echo "ROLE_ARN length: ${#ROLE_ARN} (expected: 55)"
+          echo "ROLE_ARN value: [$ROLE_ARN]"
+          IDTOKEN=$(curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          python3 -c "
+          import sys, json, base64
+          payload = sys.argv[1].split('.')[1]
+          payload += '=' * (-len(payload) % 4)
+          print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
+          " "$IDTOKEN"
+        env:
+          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+      # -----------------------------------------------------------------------
       # STEP 3: Authenticate to AWS using OIDC (no access keys stored!)
       # -----------------------------------------------------------------------
       - name: Configure AWS credentials (OIDC)
