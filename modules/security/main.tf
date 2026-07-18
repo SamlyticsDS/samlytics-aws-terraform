@@ -112,6 +112,11 @@ resource "aws_s3_bucket" "cloudtrail" {
   count  = var.enable_cloudtrail ? 1 : 0
   bucket = "${var.project_name}-${var.environment}-cloudtrail-${data.aws_caller_identity.current.account_id}"
 
+  # This project is meant to be destroyed and redeployed freely (see README) —
+  # without this, `terraform destroy` fails with BucketNotEmpty once CloudTrail
+  # has actually written logs (and their object versions) to the bucket.
+  force_destroy = true
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-cloudtrail"
   })
@@ -342,6 +347,9 @@ resource "aws_securityhub_product_subscription" "guardduty" {
 resource "aws_s3_bucket" "config" {
   count  = var.enable_aws_config ? 1 : 0
   bucket = "${var.project_name}-${var.environment}-config-${data.aws_caller_identity.current.account_id}"
+
+  # See force_destroy note on aws_s3_bucket.cloudtrail above.
+  force_destroy = true
 
   tags = local.common_tags
 }
