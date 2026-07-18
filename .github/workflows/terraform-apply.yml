@@ -140,6 +140,7 @@ jobs:
             -no-color \
             tfplan \
             2>&1 | tee apply_output.txt
+          exit ${PIPESTATUS[0]}
         env:
           TF_INPUT: false
 

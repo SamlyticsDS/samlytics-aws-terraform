@@ -82,6 +82,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false  # Wrapper masks the real exit code of piped commands
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -135,6 +136,7 @@ jobs:
             -auto-approve \
             -no-color \
             2>&1 | tee destroy_output.txt
+          exit ${PIPESTATUS[0]}
         env:
           TF_INPUT: false
 
