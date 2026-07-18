@@ -18,10 +18,8 @@ Write-Log "Configuring Windows settings..."
 Set-TimeZone -Name "GMT Standard Time"
 Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
 Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" `
-    -Name "NoAutoUpdate" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" `
-    -Name "AUOptions" -Value 3 -Type DWord -Force
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoUpdate" -Value 0 -Type DWord -Force
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "AUOptions" -Value 3 -Type DWord -Force
 auditpol /set /subcategory:"Logon" /success:enable /failure:enable | Out-Null
 auditpol /set /subcategory:"Logoff" /success:enable /failure:enable | Out-Null
 auditpol /set /subcategory:"Account Logon" /success:enable /failure:enable | Out-Null
@@ -32,8 +30,7 @@ if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
     $chocoInstall = Invoke-WebRequest -Uri 'https://community.chocolatey.org/install.ps1' -UseBasicParsing
     Invoke-Expression $chocoInstall.Content
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
-                [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
     Write-Log "Chocolatey installed successfully."
 } else {
     Write-Log "Chocolatey already installed — skipping."
@@ -42,8 +39,7 @@ Write-Log "Installing .NET 8 LTS Runtime and SDK..."
 try {
     choco install dotnet-8.0-sdk --yes --no-progress 2>&1 | ForEach-Object { Write-Log $_ }
     choco install netfx-4.8-devpack --yes --no-progress 2>&1 | ForEach-Object { Write-Log $_ }
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
-                [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
     $dotnetVersion = & dotnet --version 2>&1
     Write-Log ".NET version: $dotnetVersion"
     Write-Log ".NET 8 installation complete."
@@ -60,9 +56,7 @@ try {
     Invoke-WebRequest -Uri $sqlInstallerUrl -OutFile $sqlBootstrapper -UseBasicParsing
     Write-Log "Downloading SQL Server Express full installer..."
     $sqlFullInstallerPath = "$sqlInstallDir\SQLEXPR_x64_ENU.exe"
-    Start-Process -FilePath $sqlBootstrapper `
-        -ArgumentList "/ACTION=Download", "/MEDIAPATH=$sqlInstallDir", "/MEDIATYPE=Core", "/QUIET" `
-        -Wait -NoNewWindow
+    Start-Process -FilePath $sqlBootstrapper -ArgumentList "/ACTION=Download", "/MEDIAPATH=$sqlInstallDir", "/MEDIATYPE=Core", "/QUIET" -Wait -NoNewWindow
     $sqlInstaller = Get-ChildItem -Path $sqlInstallDir -Filter "SQLEXPR*.exe" | Select-Object -First 1
     if ($null -eq $sqlInstaller) {
         throw "SQL Server installer not found in $sqlInstallDir"
