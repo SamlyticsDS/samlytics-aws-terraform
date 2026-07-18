@@ -253,6 +253,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           title  = "CPU Utilisation (%)"
+          region = var.aws_region
           period = 300
           stat   = "Average"
           view   = "timeSeries"
@@ -276,6 +277,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           title  = "Memory Usage (%)"
+          region = var.aws_region
           period = 300
           stat   = "Average"
           view   = "timeSeries"
@@ -299,6 +301,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           title  = "Disk Free Space (%)"
+          region = var.aws_region
           period = 300
           stat   = "Average"
           view   = "timeSeries"
@@ -316,6 +319,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           title  = "Network Traffic (bytes)"
+          region = var.aws_region
           period = 300
           stat   = "Sum"
           view   = "timeSeries"

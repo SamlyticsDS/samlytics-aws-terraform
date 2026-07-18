@@ -41,6 +41,11 @@ public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
 private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
 
 # EC2 instance size (see variables.tf for options and costs)
+# Brand-new AWS accounts are often restricted to Free Tier-eligible instance
+# types (AWS returns InvalidParameterCombination for anything else). If you
+# hit that, run: aws ec2 describe-instance-types --filters
+# "Name=free-tier-eligible,Values=true" and pick from that list until AWS
+# lifts the restriction.
 instance_type = "t3.xlarge"
 
 # Storage sizes (in GB)
