@@ -193,10 +193,13 @@ locals {
 }
 
 # Generate a random SQL Server sa (admin) password
+# Excludes $, {, }, and backtick — this value is embedded directly into a
+# double-quoted string in userdata.ps1, and those characters trigger
+# PowerShell variable/subexpression interpolation, corrupting the script.
 resource "random_password" "sql_admin" {
   length           = 20
   special          = true
-  override_special = "!#$%&*()-_=+[]{}:?"
+  override_special = "!#%&*()-_=+[]:?"
 }
 
 # Store the SQL password in SSM Parameter Store (encrypted)
