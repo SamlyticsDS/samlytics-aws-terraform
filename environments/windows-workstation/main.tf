@@ -130,6 +130,7 @@ module "monitoring" {
   source = "../../modules/monitoring"
 
   project_name      = var.project_name
+  aws_region        = var.aws_region
   environment       = var.environment
   alert_email       = var.alert_email
   ec2_instance_id   = module.ec2_windows.instance_id
