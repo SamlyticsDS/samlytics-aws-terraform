@@ -125,15 +125,23 @@ variable "disk_alarm_threshold" {
 # ----------- SECURITY -----------
 
 variable "enable_guardduty" {
-  description = "Enable GuardDuty threat detection. Highly recommended. First 30 days free."
+  description = <<-EOT
+    Enable GuardDuty threat detection. Highly recommended. First 30 days free.
+    Defaults to false because brand-new AWS accounts often get a temporary
+    SubscriptionRequiredException on GuardDuty/Security Hub for the first
+    day or two. Set to true once your account has full access.
+  EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_security_hub" {
-  description = "Enable Security Hub compliance dashboard. Recommended."
+  description = <<-EOT
+    Enable Security Hub compliance dashboard. Recommended.
+    Defaults to false for the same new-account restriction as enable_guardduty.
+  EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_cloudtrail" {

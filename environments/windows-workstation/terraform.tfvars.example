@@ -59,7 +59,10 @@ disk_alarm_threshold   = 85
 # To allow direct RDP from your office IP: ["203.0.113.10/32"]
 allowed_rdp_cidrs = []
 
-# Security features (all recommended)
+# Security features (all recommended once your AWS account has full access)
+# Brand-new AWS accounts often can't enable GuardDuty/Security Hub for the
+# first day or two (AWS returns SubscriptionRequiredException). If you hit
+# that, set these two to false and re-enable them later.
 enable_guardduty    = true
 enable_security_hub = true
 enable_cloudtrail   = true

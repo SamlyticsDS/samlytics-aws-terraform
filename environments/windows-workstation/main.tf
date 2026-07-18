@@ -30,12 +30,14 @@ provider "aws" {
   region = var.aws_region
 
   # Default tags applied to EVERY resource — makes cost tracking easy
+  # Do not add non-deterministic values here (e.g. timestamp()) — the AWS
+  # provider fails some resource types with "Provider produced inconsistent
+  # final plan" when a default tag's value can't be known at plan time.
   default_tags {
     tags = merge(var.tags, {
       Project     = var.project_name
       Environment = var.environment
       ManagedBy   = "Terraform"
-      DeployedAt  = timestamp()  # Shows when it was last deployed
     })
   }
 }
