@@ -148,6 +148,7 @@ jobs:
             -no-color \
             -out=tfplan \
             2>&1 | tee plan_output.txt
+          exit ${PIPESTATUS[0]}
         continue-on-error: true  # Don't fail yet — we post the output first
         env:
           TF_INPUT: false
